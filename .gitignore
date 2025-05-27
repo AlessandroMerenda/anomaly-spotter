@@ -1,0 +1,76 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual Environment
+venv/
+ENV/
+env/
+.env
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+.project
+.pydevproject
+.settings/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+*.ipynb_checkpoints/
+
+# Dataset (MVTec AD è grande, meglio non versionarlo)
+data/mvtec_ad/
+
+# Output e modelli
+outputs/
+*.pth
+*.npy
+*.png
+*.jpg
+*.jpeg
+
+# Log e cache
+*.log
+.cache/
+logs/
+
+# Sistema operativo
+.DS_Store
+Thumbs.db
+*.db
+
+# Configurazioni locali
+.env.local
+.env.*.local
+
+# File temporanei
+*.tmp
+*.bak
+*.swp
+*~
+
+# Eccezioni per file di esempio o necessari
+!examples/*.png
+!docs/images/*.png
+!assets/*.png 
