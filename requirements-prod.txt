@@ -1,0 +1,35 @@
+# Anomaly Spotter - Production Dependencies
+# Versioni pinned e ottimizzate per produzione
+# Include solo le dipendenze strettamente necessarie
+# Uso: pip install -r requirements-prod.txt
+
+# Core ML/DL Framework (CPU optimized versions available)
+torch==2.1.2
+torchvision==0.16.2
+
+# Image Processing
+Pillow==10.1.0
+scikit-image==0.22.0
+
+# Numerical Computing
+numpy==1.24.4
+scipy==1.11.4
+
+# Configuration
+PyYAML==6.0.1
+
+# System monitoring
+psutil==5.9.6
+
+# Progress bars (minimal overhead)
+tqdm==4.66.1
+
+# Production logging (se serve structured logging avanzato)
+# structlog==23.2.0
+
+# Security scanning
+# safety==2.3.5
+
+# Note: matplotlib rimossa in produzione se non necessaria per visualizzazioni runtime
+# Se necessaria per generazione report, decommentare:
+# matplotlib==3.8.2

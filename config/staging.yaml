@@ -1,0 +1,42 @@
+# Configurazione per ambiente di staging
+environment: staging
+debug: false
+config_version: "1.0"
+
+model:
+  input_size: [128, 128]
+  channels: 3
+  latent_dim: 512
+  architecture: "AutoencoderUNetLite"
+
+training:
+  batch_size: 32
+  num_epochs: 50
+  learning_rate: 0.0001
+  validation_split: 0.2
+  num_workers: 4
+  early_stopping_patience: 10
+  gradient_clip_value: 1.0
+  save_every_n_epochs: 10
+
+anomaly:
+  threshold_pixel: 0.015
+  gaussian_sigma: 1.0
+  min_recall: 0.95
+  use_otsu_threshold: true
+  morphological_operations: false
+  min_anomaly_area: 10
+
+visualization:
+  figure_size: [15, 5]
+  dpi: 150
+  colormap: "inferno"
+  font_size: 10
+  save_format: "png"
+
+logging:
+  level: "INFO"
+  console_output: true
+  file_output: true
+  max_file_size_mb: 100
+  backup_count: 5

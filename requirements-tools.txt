@@ -1,0 +1,22 @@
+# Anomaly Spotter - Dependency Management Tools
+# Tools per gestione e sicurezza delle dipendenze
+# Uso: pip install -r requirements-tools.txt
+
+# Dependency analysis and security
+pip-audit==2.6.1          # Vulnerability scanning
+safety==2.3.5             # Security check
+pipdeptree==2.13.1        # Dependency tree visualization
+pip-tools==7.3.0          # Requirements compilation from .in files
+
+# Package management
+pip-check==2.8.1          # Check for package updates
+outdated==0.2.2           # Find outdated packages
+
+# Requirements synchronization
+pip-sync==7.3.0           # Sync environment with requirements
+
+# License compliance
+pip-licenses==4.3.2       # License information extraction
+
+# Virtual environment management
+virtualenv==20.24.6       # Virtual environment creation

@@ -1,0 +1,28 @@
+# Anomaly Spotter - Docker Dependencies
+# Ottimizzato per container con immagini base slim
+# Uso: pip install -r requirements-docker.txt
+
+# ML Framework - CPU only versions per container leggeri
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch==2.1.2+cpu
+torchvision==0.16.2+cpu
+
+# Image Processing - versioni ottimizzate
+Pillow==10.1.0
+scikit-image==0.22.0
+
+# Numerics
+numpy==1.24.4
+scipy==1.11.4
+
+# Config
+PyYAML==6.0.1
+
+# System monitoring
+psutil==5.9.6
+
+# Essential utils
+tqdm==4.66.1
+
+# Container health checks
+# requests==2.31.0  # se serve health endpoint HTTP

@@ -42,18 +42,46 @@ env/
 # Dataset (MVTec AD è grande, meglio non versionarlo)
 data/mvtec_ad/
 
-# Output e modelli
-outputs/
-*.pth
+# Output e modelli (mantieni model.pth e thresholds per deployment)
+outputs/test_results/*
+outputs/overlay/*
+outputs/stats/*
+!outputs/test_results/.gitkeep
+!outputs/overlay/.gitkeep
+!outputs/stats/.gitkeep
+# outputs/model.pth  # Decommenta per escludere modello dal version control
+# outputs/thresholds.*  # Decommenta per escludere soglie dal version control
 *.npy
-*.png
-*.jpg
-*.jpeg
+
+# Immagini generate (mantieni quelle di documentazione)
+outputs/**/*.png
+outputs/**/*.jpg
+outputs/**/*.jpeg
+!docs/images/*.png
+!examples/*.png
+!assets/*.png
 
 # Log e cache
 *.log
 .cache/
 logs/
+.pip-cache/
+
+# Testing e coverage
+.coverage
+.pytest_cache/
+htmlcov/
+.tox/
+.hypothesis/
+
+# Dependency management tools
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Virtual environments aggiuntivi
+test-upgrade/
+venv-prod/
+venv-*/
 
 # Sistema operativo
 .DS_Store

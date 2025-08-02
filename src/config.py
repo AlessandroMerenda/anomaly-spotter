@@ -1,74 +1,80 @@
-import os
+"""
+Configuration module - DEPRECATED
+Questo file è mantenuto per compatibilità ma è deprecato.
+Usa il nuovo sistema: src.utils.config_manager
 
-# Percorsi base
-ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-DATA_ROOT = os.path.join(ROOT_DIR, "data", "mvtec_ad")
-OUTPUT_ROOT = os.path.join(ROOT_DIR, "outputs")
+MIGRATION GUIDE:
+Vecchio: from src.config import MODEL_CONFIG
+Nuovo:   from src.utils.config_manager import get_config
+         config = get_config()
+         model_config = config.model
+"""
 
-# Configurazione modello
-MODEL_CONFIG = {
-    'input_size': (128, 128),
-    'channels': 3,
-    'latent_dim': 512
-}
+import warnings
+from .utils.config_manager import get_config
 
-# Parametri training
-TRAINING_CONFIG = {
-    'batch_size': 32,
-    'num_epochs': 100,
-    'learning_rate': 1e-4,
-    'validation_split': 0.2,
-    'num_workers': 4
-}
+# Emetti warning di deprecazione
+warnings.warn(
+    "src.config è deprecato. Usa src.utils.config_manager.get_config() invece.",
+    DeprecationWarning,
+    stacklevel=2
+)
 
-# Configurazione anomaly detection
-ANOMALY_CONFIG = {
-    'threshold_pixel': 0.015,
-    'gaussian_sigma': 1.0,
-    'min_recall': 0.95
-}
+# Per compatibilità, esponi le configurazioni vecchio stile
+def _get_legacy_config():
+    """Ottieni configurazione in formato legacy per compatibilità."""
+    config = get_config()
+    
+    return {
+        'MODEL_CONFIG': {
+            'input_size': config.model.input_size,
+            'channels': config.model.channels,
+            'latent_dim': config.model.latent_dim
+        },
+        'TRAINING_CONFIG': {
+            'batch_size': config.training.batch_size,
+            'num_epochs': config.training.num_epochs,
+            'learning_rate': config.training.learning_rate,
+            'validation_split': config.training.validation_split,
+            'num_workers': config.training.num_workers
+        },
+        'ANOMALY_CONFIG': {
+            'threshold_pixel': config.anomaly.threshold_pixel,
+            'gaussian_sigma': config.anomaly.gaussian_sigma,
+            'min_recall': config.anomaly.min_recall
+        },
+        'VISUALIZATION_CONFIG': {
+            'figure_size': config.visualization.figure_size,
+            'dpi': config.visualization.dpi,
+            'colormap': config.visualization.colormap,
+            'font_size': config.visualization.font_size
+        },
+        'CATEGORIES': {
+            "screw": ["good", "manipulated_front", "scratch_head", "scratch_neck", "thread_side", "thread_top"],
+            "capsule": ["good", "crack", "faulty_imprint", "poke", "scratch", "squeeze"],
+            "hazelnut": ["good", "crack", "cut", "hole", "print"]
+        },
+        'PATHS': {
+            'model': config.paths.model_file,
+            'thresholds_csv': config.paths.thresholds_csv,
+            'thresholds_json': config.paths.thresholds_json,
+            'training_plot': config.paths.training_plot,
+            'test_results': config.paths.test_results_dir,
+            'all_results': config.paths.all_results_dir
+        },
+        'DATA_ROOT': config.paths.data_root,
+        'OUTPUT_ROOT': config.paths.output_root
+    }
 
-# Categorie e tipi di difetti
-CATEGORIES = {
-    "screw": [
-        "good",
-        "manipulated_front",
-        "scratch_head",
-        "scratch_neck",
-        "thread_side",
-        "thread_top"
-    ],
-    "capsule": [
-        "good",
-        "crack",
-        "faulty_imprint",
-        "poke",
-        "scratch",
-        "squeeze"
-    ],
-    "hazelnut": [
-        "good",
-        "crack",
-        "cut",
-        "hole",
-        "print"
-    ]
-}
+# Carica configurazione legacy
+_legacy = _get_legacy_config()
 
-# Configurazione visualizzazione
-VISUALIZATION_CONFIG = {
-    'figure_size': (15, 5),
-    'dpi': 150,
-    'colormap': 'inferno',
-    'font_size': 10
-}
-
-# Percorsi output
-PATHS = {
-    'model': os.path.join(OUTPUT_ROOT, "model.pth"),
-    'thresholds_csv': os.path.join(OUTPUT_ROOT, "thresholds.csv"),
-    'thresholds_json': os.path.join(OUTPUT_ROOT, "thresholds.json"),
-    'training_plot': os.path.join(OUTPUT_ROOT, "training_history.png"),
-    'test_results': os.path.join(OUTPUT_ROOT, "test_results"),
-    'all_results': os.path.join(OUTPUT_ROOT, "all_results")
-} 
+# Esporta per compatibilità (CON WARNING)
+MODEL_CONFIG = _legacy['MODEL_CONFIG']
+TRAINING_CONFIG = _legacy['TRAINING_CONFIG'] 
+ANOMALY_CONFIG = _legacy['ANOMALY_CONFIG']
+VISUALIZATION_CONFIG = _legacy['VISUALIZATION_CONFIG']
+CATEGORIES = _legacy['CATEGORIES']
+PATHS = _legacy['PATHS']
+DATA_ROOT = _legacy['DATA_ROOT']
+OUTPUT_ROOT = _legacy['OUTPUT_ROOT'] 

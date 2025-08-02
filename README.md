@@ -119,6 +119,103 @@ anomaly-spotter/
 └── requirements.txt          # Dipendenze Python
 ```
 
+## 🚀 Quick Start
+
+### Installazione
+
+Il progetto include un sistema avanzato di gestione dipendenze per diversi ambienti:
+
+```bash
+# 1. Clona il repository
+git clone https://github.com/username/anomaly-spotter.git
+cd anomaly-spotter
+
+# 2. Setup ambiente sviluppo (completo)
+make dev-setup
+# oppure manuale:
+python -m venv venv
+source venv/bin/activate  # Linux/Mac
+# venv\Scripts\activate    # Windows
+./deps.sh install dev
+
+# 3. Setup produzione (minimal)
+make prod-setup
+# oppure: ./deps.sh install prod
+```
+
+### Ambienti Supportati
+
+| Ambiente | File Requirements | Uso |
+|----------|------------------|-----|
+| **Sviluppo** | `requirements-dev.txt` | Testing, linting, jupyter |
+| **Produzione** | `requirements-prod.txt` | Deploy ottimizzato |
+| **Testing** | `requirements-test.txt` | CI/CD pipeline |
+| **Docker** | `requirements-docker.txt` | Container leggeri |
+| **Tools** | `requirements-tools.txt` | Gestione dipendenze |
+
+### Gestione Dipendenze
+
+```bash
+# Controlli sicurezza
+make security              # Vulnerability scan
+./deps.sh audit           # Dependency audit
+
+# Sviluppo
+make format               # Code formatting  
+make lint                 # Code linting
+make test                 # Run test suite
+
+# Controllo aggiornamenti
+make outdated             # Check package updates
+./deps.sh tree           # Visualizza dependency tree
+```
+
+### Training del Modello
+
+```bash
+# Training automatico
+make run-train
+# oppure diretto:
+python src/train_model.py
+
+# Training con Jupyter
+make notebook
+# Apre: notebooks/train_autoencoder.ipynb
+```
+
+### Test e Inferenza
+
+```bash
+# Test del modello
+make run-test
+python src/test_model.py
+
+# Processo batch completo  
+make run-process-all
+python src/process_all.py
+
+# Overlay visualizzazioni
+make run-overlay
+python src/run_overlay_batch.py
+```
+
+### Configurazione Avanzata
+
+Il sistema supporta configurazioni multi-ambiente:
+
+```bash
+# Configurazioni disponibili
+config/
+├── development.yaml      # Sviluppo locale
+├── staging.yaml         # Staging environment  
+├── production.yaml      # Produzione
+└── testing.yaml        # CI/CD testing
+
+# Uso con variabili ambiente
+export ANOMALY_SPOTTER_ENV=production
+python src/train_model.py  # Usa config production
+```
+
 ## 🔬 Metodologia Tecnica
 
 ### Preprocessing Pipeline
