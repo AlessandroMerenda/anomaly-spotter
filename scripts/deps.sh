@@ -30,16 +30,21 @@ print_error() {
 
 # Function to check if we're in a virtual environment
 check_venv() {
-    if [[ "$VIRTUAL_ENV" == "" ]]; then
+    if [[ "$VIRTUAL_ENV" == "" ]] && [[ "$CONDA_DEFAULT_ENV" == "" ]]; then
         print_warning "Non sei in un virtual environment!"
-        print_warning "Consigliato: python -m venv venv && source venv/bin/activate"
+        print_warning "Opzioni consigliate:"
+        print_warning "  1. Python venv (sviluppo): python -m venv venv && source venv/bin/activate"
+        print_warning "  2. Conda (ML/research): conda create -n anomaly-spotter python=3.11"
+        print_warning "  3. Docker (produzione): make docker-build && make docker-run"
         read -p "Continuare comunque? (y/N): " -n 1 -r
         echo
         if [[ ! $REPLY =~ ^[Yy]$ ]]; then
             exit 1
         fi
-    else
-        print_status "Virtual environment attivo: $VIRTUAL_ENV"
+    elif [[ "$VIRTUAL_ENV" != "" ]]; then
+        print_status "Python venv attivo: $VIRTUAL_ENV"
+    elif [[ "$CONDA_DEFAULT_ENV" != "" ]]; then
+        print_status "Conda environment attivo: $CONDA_DEFAULT_ENV"
     fi
 }
 
@@ -50,27 +55,27 @@ install_deps() {
     
     case $env in
         "dev"|"development")
-            requirements_file="requirements-dev.txt"
+            requirements_file="requirements/dev.txt"
             print_status "Installazione dipendenze per sviluppo..."
             ;;
         "test"|"testing")
-            requirements_file="requirements-test.txt"
+            requirements_file="requirements/test.txt"
             print_status "Installazione dipendenze per testing..."
             ;;
         "prod"|"production")
-            requirements_file="requirements-prod.txt"
+            requirements_file="requirements/prod.txt"
             print_status "Installazione dipendenze per produzione..."
             ;;
         "docker")
-            requirements_file="requirements-docker.txt"
+            requirements_file="requirements/docker.txt"
             print_status "Installazione dipendenze per Docker..."
             ;;
         "tools")
-            requirements_file="requirements-tools.txt"
+            requirements_file="requirements/tools.txt"
             print_status "Installazione tools per gestione dipendenze..."
             ;;
         *)
-            requirements_file="requirements.txt"
+            requirements_file="requirements/base.txt"
             print_status "Installazione dipendenze base..."
             ;;
     esac

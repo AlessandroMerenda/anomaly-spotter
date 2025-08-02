@@ -27,27 +27,27 @@ venv: ## Crea virtual environment
 # Installation targets
 install: ## Installa dipendenze base
 	$(PIP) install --upgrade pip
-	$(PIP) install -r requirements.txt
+	$(PIP) install -r requirements/base.txt
 
 install-dev: ## Installa dipendenze per sviluppo
 	$(PIP) install --upgrade pip
-	$(PIP) install -r requirements-dev.txt
+	$(PIP) install -r requirements/dev.txt
 
 install-prod: ## Installa dipendenze per produzione
 	$(PIP) install --upgrade pip
-	$(PIP) install -r requirements-prod.txt
+	$(PIP) install -r requirements/prod.txt
 
 install-test: ## Installa dipendenze per testing
 	$(PIP) install --upgrade pip
-	$(PIP) install -r requirements-test.txt
+	$(PIP) install -r requirements/test.txt
 
 install-docker: ## Installa dipendenze per Docker
 	$(PIP) install --upgrade pip
-	$(PIP) install -r requirements-docker.txt
+	$(PIP) install -r requirements/docker.txt
 
 install-tools: ## Installa tools per gestione dipendenze
 	$(PIP) install --upgrade pip
-	$(PIP) install -r requirements-tools.txt
+	$(PIP) install -r requirements/tools.txt
 
 # Dependency management
 security: ## Controlla vulnerabilità di sicurezza

@@ -123,31 +123,30 @@ anomaly-spotter/
 
 ### Installazione
 
-Il progetto include un sistema avanzato di gestione dipendenze per diversi ambienti:
+Il progetto utilizza **Conda** per la gestione ottimale delle dipendenze ML e CUDA:
 
 ```bash
 # 1. Clona il repository
-git clone https://github.com/username/anomaly-spotter.git
+git clone https://github.com/AlessandroMerenda/anomaly-spotter.git
 cd anomaly-spotter
 
-# 2. Setup ambiente sviluppo (completo)
-make dev-setup
-# oppure manuale:
-python -m venv venv
-source venv/bin/activate  # Linux/Mac
-# venv\Scripts\activate    # Windows
-./deps.sh install dev
+# 2. Setup ambiente Conda (raccomandato)
+./scripts/setup_environment.sh
 
-# 3. Setup produzione (minimal)
-make prod-setup
-# oppure: ./deps.sh install prod
+# 3. Attiva ambiente
+conda activate anomaly-spotter
+
+# 4. Verifica installazione
+python -c "import torch; print(f'CUDA: {torch.cuda.is_available()}')"
 ```
 
 ### Ambienti Supportati
 
-| Ambiente | File Requirements | Uso |
-|----------|------------------|-----|
-| **Sviluppo** | `requirements-dev.txt` | Testing, linting, jupyter |
+| Ambiente | File Conda | Uso | Hardware |
+|----------|------------|-----|----------|
+| **Development** | `envs/environment.yml` | Training, GPU development | CUDA 11.8+ |
+| **Production** | `envs/environment-cpu.yml` | Deployment, inferenza | CPU-only |
+| **Legacy** | `requirements/*.txt` | Pip fallback | Vario |
 | **Produzione** | `requirements-prod.txt` | Deploy ottimizzato |
 | **Testing** | `requirements-test.txt` | CI/CD pipeline |
 | **Docker** | `requirements-docker.txt` | Container leggeri |

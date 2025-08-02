@@ -43,6 +43,6 @@ logging:
 
 # I percorsi sono auto-configurati ma possono essere sovrascritti
 paths:
-  # project_root: "/path/to/project"  # Auto-detect se non specificato
-  # data_root: "/custom/data/path"    # Override se necessario
-  # output_root: "/custom/output"     # Override se necessario
+  project_root: null    # Auto-detect se non specificato
+  data_root: null       # Override se necessario
+  output_root: null     # Override se necessario
