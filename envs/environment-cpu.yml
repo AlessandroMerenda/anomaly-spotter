@@ -1,0 +1,46 @@
+name: anomaly-spotter-cpu
+channels:
+  - pytorch
+  - conda-forge
+  - defaults
+
+dependencies:
+  # Core Python
+  - python=3.10
+  
+  # PyTorch ecosystem (CPU-only)
+  - pytorch-cpu=2.1.2
+  - torchvision-cpu=0.16.2
+  
+  # Scientific computing
+  - numpy=1.24.3
+  - scipy=1.11.1
+  - scikit-learn=1.3.0
+  
+  # Computer vision
+  - opencv=4.8.0
+  - pillow=10.0.0
+  
+  # Data handling
+  - pandas=2.0.3
+  - h5py=3.9.0
+  
+  # Visualization
+  - matplotlib=3.7.2
+  - seaborn=0.12.2
+  
+  # Configuration
+  - pyyaml=6.0.1
+  
+  # Jupyter (optional for notebooks)
+  - jupyter=1.0.0
+  - ipykernel=6.25.0
+  
+  # Development tools
+  - pip=23.2.1
+  
+  # Additional pip packages
+  - pip:
+    - colorlog==6.7.0
+    - tqdm==4.65.0
+    - albumentations==1.3.1
