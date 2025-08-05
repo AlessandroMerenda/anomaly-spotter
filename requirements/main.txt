@@ -1,13 +1,11 @@
 # Anomaly Spotter - Core Dependencies
-# Versioni pinned per riproducibilità in produzione
-# Generato automaticamente - NON modificare manualmente
-# Usa: pip install -r requirements/base.txt
+# Install with: pip install -r requirements.txt
 
 # Core ML/DL Framework
 torch>=2.1.0
 torchvision>=0.16.0
 
-# Computer Vision
+# Computer Vision & Image Processing
 opencv-python>=4.8.0
 Pillow>=10.0.0
 scikit-image>=0.22.0
@@ -22,12 +20,20 @@ pandas>=2.0.0
 
 # Visualization
 matplotlib>=3.8.0
+seaborn>=0.12.0
 
-# Utilities
+# Progress & Utilities
 tqdm>=4.66.0
 psutil>=5.9.0
 PyYAML>=6.0.0
+
+# Logging
 colorlog>=6.7.0
 
 # Machine Learning
-scikit-learn>=1.3.0 
+scikit-learn>=1.3.0
+
+# Optional advanced features (install separately if needed)
+# wandb>=0.15.0  # For experiment tracking
+# tensorboard>=2.15.0  # For tensorboard logging
+# pytorch-msssim>=1.0.0  # For SSIM loss
