@@ -1,0 +1,97 @@
+# Example custom configuration for anomaly detection training
+# This file shows all configurable parameters with their default values
+
+# Model Architecture
+input_size: [128, 128]  # Input image size [height, width]
+input_channels: 3       # RGB images
+feature_dims: [64, 128, 256, 512]  # Encoder feature dimensions
+dropout_rate: 0.1       # Dropout rate for regularization
+
+# Training Parameters
+epochs: 100             # Maximum number of training epochs
+batch_size: 32          # Batch size for training
+learning_rate: 0.001    # Initial learning rate
+weight_decay: 1e-4      # L2 regularization weight decay
+
+# Optimizer Settings
+optimizer_type: 'adamw' # Optimizer: 'adamw', 'adam', 'sgd'
+scheduler_type: 'plateau' # Scheduler: 'plateau', 'cosine', 'step', 'none'
+scheduler_patience: 5   # Patience for ReduceLROnPlateau
+
+# Loss Function Configuration
+loss_weights:
+  mse: 1.0             # MSE reconstruction loss weight
+  ssim: 0.3            # SSIM loss weight (if enabled)
+  perceptual: 0.1      # Perceptual loss weight (if enabled)
+  edge: 0.05           # Edge preservation loss weight (if enabled)
+
+enable_ssim_loss: true       # Enable SSIM loss component
+enable_perceptual_loss: true # Enable VGG-based perceptual loss
+enable_edge_loss: true       # Enable edge preservation loss
+
+# Training Stability
+use_amp: true           # Use Automatic Mixed Precision (faster on modern GPUs)
+gradient_clip: 1.0      # Gradient clipping threshold (0 = disabled)
+
+# Early Stopping
+early_stopping_patience: 15  # Stop if no improvement for N epochs (0 = disabled)
+
+# Normalization (ImageNet statistics)
+normalize: true         # Apply ImageNet normalization
+mean: [0.485, 0.456, 0.406]  # ImageNet mean values
+std: [0.229, 0.224, 0.225]   # ImageNet std values
+
+# Category-Specific Overrides (examples)
+# These will override the base config for specific categories
+
+# Capsule category (smooth objects, focus on surface defects)
+capsule:
+  learning_rate: 0.0005
+  loss_weights:
+    mse: 1.0
+    ssim: 0.5    # Higher SSIM weight for surface quality
+    perceptual: 0.1
+    edge: 0.02   # Lower edge weight
+  early_stopping_patience: 20
+
+# Hazelnut category (textured objects, structural defects)  
+hazelnut:
+  learning_rate: 0.001
+  loss_weights:
+    mse: 1.0
+    ssim: 0.2
+    perceptual: 0.15
+    edge: 0.1    # Higher edge weight for structural defects
+  dropout_rate: 0.15
+
+# Screw category (metallic objects, threading defects)
+screw:
+  learning_rate: 0.0008
+  loss_weights:
+    mse: 1.0
+    ssim: 0.3
+    perceptual: 0.2  # Higher perceptual for metallic surfaces
+    edge: 0.08
+  batch_size: 24       # Smaller batch for memory efficiency
+  gradient_clip: 0.5   # Tighter gradient clipping
+
+# Advanced Training Settings
+data_augmentation:
+  rotation_range: 15      # Random rotation degrees
+  brightness_range: 0.1   # Brightness variation
+  contrast_range: 0.1     # Contrast variation
+  noise_std: 0.02         # Gaussian noise standard deviation
+  
+# Validation Settings
+validation_split: 0.2     # Fraction of training data for validation
+validation_frequency: 1   # Validate every N epochs
+
+# Logging and Checkpointing
+save_frequency: 5         # Save checkpoint every N epochs
+log_images_frequency: 10  # Log reconstruction images every N epochs
+tensorboard_enabled: true # Enable Tensorboard logging
+
+# Hardware Optimization
+pin_memory: true          # Pin memory for faster GPU transfers
+persistent_workers: true  # Keep dataloader workers alive between epochs
+prefetch_factor: 2        # Number of batches to prefetch per worker

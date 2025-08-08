@@ -116,7 +116,12 @@ anomaly-spotter/
 │   ├── extract_metrics.py    # Estrazione anomaly scores
 │   ├── process_all.py        # Batch processing completo
 │   └── config.py             # Configurazioni centralizzate
-└── requirements.txt          # Dipendenze Python
+├── requirements/             # Organized dependency files
+│   ├── main.txt             # Core dependencies
+│   ├── dev.txt              # Development dependencies
+│   ├── wandb.txt            # W&B integration
+│   └── ...                  # Other specialized requirements
+└── requirements.txt          # Main dependencies (convenience file)
 ```
 
 ## 🚀 Quick Start
@@ -301,7 +306,7 @@ graph TD
 
 ```python
 import torch
-from src.model import AutoencoderUNetLite
+from src.core.model import AutoencoderUNetLite
 from src.overlay import generate_overlay
 from torchvision import transforms
 
@@ -557,17 +562,34 @@ anomaly-spotter/
 │   ├── test_results/         # Test visualizations
 │   └── stats/                # Detailed per-image metrics
 ├── 🐍 src/                    # Source code (1,045 lines)
-│   ├── model.py              # U-Net Autoencoder architecture
+│   ├── core/                 # Core architecture (modern modular structure)
+│   │   ├── model.py         # U-Net Autoencoder architecture  
+│   │   ├── model_config.py  # Model configuration
+│   │   └── losses.py        # Advanced loss functions
+│   ├── data/                # Data pipeline
+│   │   ├── loaders.py       # Advanced dataset loaders
+│   │   └── preprocessing.py # Image preprocessing
+│   ├── training/            # Training system
+│   │   └── trainer.py       # Advanced trainer with AMP/W&B
+│   ├── evaluation/          # Evaluation system
+│   │   └── evaluator.py     # Comprehensive evaluation
+│   ├── utils/               # Utilities
+│   │   ├── config_manager.py # Modern config system
+│   │   ├── logging_utils.py  # Enhanced logging
+│   │   └── wandb_logger.py   # W&B integration
 │   ├── train_model.py        # Training pipeline
 │   ├── test_model.py         # Inference system
-│   ├── data.py               # Custom dataset loader
 │   ├── overlay.py            # Visualizations and heatmaps
-│   ├── metrics.py            # Metrics calculation and thresholds
-│   ├── compute_thresholds.py # Adaptive threshold calibration
+│   ├── compute_thresholds_advanced.py # Advanced threshold computation
 │   ├── extract_metrics.py    # Anomaly scores extraction
 │   ├── process_all.py        # Complete batch processing
-│   └── config.py             # Centralized configurations
-└── requirements.txt          # Python dependencies
+│   └── config.py             # Legacy configurations (deprecated)
+├── requirements/             # Organized dependency files
+│   ├── main.txt             # Core dependencies
+│   ├── dev.txt              # Development dependencies
+│   ├── wandb.txt            # W&B integration
+│   └── ...                  # Other specialized requirements
+└── requirements.txt          # Main dependencies (convenience file)
 ```
 
 ## 🔬 Technical Methodology
@@ -656,7 +678,7 @@ graph TD
 
 ```python
 import torch
-from src.model import AutoencoderUNetLite
+from src.core.model import AutoencoderUNetLite
 from src.overlay import generate_overlay
 from torchvision import transforms
 
