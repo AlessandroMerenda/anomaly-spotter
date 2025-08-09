@@ -13,8 +13,19 @@ from PIL import Image
 import logging
 
 # Import preprocessing and utilities
-from src.data.preprocessing import MVTecPreprocessor
-from src.utils.logging_utils import setup_logger, DataError
+try:
+    # Try relative imports first
+    from .preprocessing import MVTecPreprocessor
+    from ..utils.logging_utils import setup_logger, DataError
+except ImportError:
+    # Fallback to absolute imports
+    try:
+        from data.preprocessing import MVTecPreprocessor
+        from utils.logging_utils import setup_logger, DataError
+    except ImportError:
+        # Final fallback - direct path imports
+        from src.data.preprocessing import MVTecPreprocessor
+        from src.utils.logging_utils import setup_logger, DataError
 
 class MVTecDataset(Dataset):
     """
@@ -157,76 +168,139 @@ class MVTecDataset(Dataset):
         """
         Get a single sample.
         
+        Args:
+            idx: Sample index
+            
         Returns:
             Dictionary containing:
-            - image: Preprocessed image tensor
-            - label: 0 for normal, 1 for anomaly
-            - mask: Ground truth mask (if available) or zeros
-            - path: Original image path
-            - category: Category name
+            - image: Preprocessed image tensor [C, H, W]
+            - label: 0 for normal, 1 for anomaly  
+            - mask: Ground truth mask tensor (if available) or dummy mask
+            - path: Original image path string
+            - category: Category name string
+            
+        Raises:
+            RuntimeError: If sample loading fails critically
+            IndexError: If idx is out of bounds
         """
+        # Validate index
+        if idx < 0 or idx >= len(self.image_paths):
+            raise IndexError(f"Sample index {idx} out of bounds [0, {len(self.image_paths)})")
+            
+        image_path = self.image_paths[idx]
+        
         try:
-            # Load image
-            image = self._load_image(self.image_paths[idx])
+            # Load image with detailed error context
+            image = self._load_image(image_path)
             if image is None:
-                raise DataError(f"Failed to load image: {self.image_paths[idx]}")
+                raise DataError(f"Failed to load image: {image_path}")
+            
+            # Validate loaded image
+            if not isinstance(image, np.ndarray) or image.size == 0:
+                raise DataError(f"Invalid image data loaded from: {image_path}")
+                
+            if len(image.shape) != 3 or image.shape[2] not in [1, 3, 4]:
+                raise DataError(f"Invalid image shape {image.shape} from: {image_path}")
             
             # Load mask if available
             mask = None
-            if self.mask_paths[idx] is not None:
-                mask = self._load_mask(self.mask_paths[idx])
+            mask_path = self.mask_paths[idx] if idx < len(self.mask_paths) else None
+            
+            if mask_path is not None:
+                mask = self._load_mask(mask_path)
+                if mask is not None and (mask.size == 0 or len(mask.shape) not in [2, 3]):
+                    self.logger.warning(f"Invalid mask shape {mask.shape} from: {mask_path}, ignoring")
+                    mask = None
             
             # Apply preprocessing
-            if self.preprocessor is not None:
-                is_training = self.split == 'train'
+            processed_image = self._apply_preprocessing(image, mask, image_path)
+            if processed_image is None:
+                raise DataError(f"Preprocessing failed for: {image_path}")
                 
-                if mask is not None:
-                    # Use albumentations transforms that support masks
-                    transform = self.preprocessor.get_transform(is_training)
-                    transformed = transform(image=image, mask=mask)
-                    image = transformed['image']
-                    mask = transformed['mask']
-                else:
-                    # Standard image preprocessing
-                    image = self.preprocessor.preprocess_single(
-                        self.image_paths[idx], 
-                        is_training=is_training
-                    )
-                    if image is None:
-                        raise DataError(f"Preprocessing failed: {self.image_paths[idx]}")
-            else:
-                # Convert to tensor if no preprocessor
-                if isinstance(image, np.ndarray):
-                    image = torch.from_numpy(image.transpose(2, 0, 1)).float()
-                
-                if mask is not None and isinstance(mask, np.ndarray):
-                    mask = torch.from_numpy(mask).float()
-            
-            # Ensure mask is tensor
-            if mask is None:
-                mask = torch.zeros(1, 1, 1)  # Dummy mask
-            elif not isinstance(mask, torch.Tensor):
-                mask = torch.from_numpy(mask).float()
+            # Handle mask processing
+            processed_mask = self._process_mask(mask, processed_image.shape[-2:] if hasattr(processed_image, 'shape') else None)
             
             return {
-                'image': image,
+                'image': processed_image,
                 'label': self.labels[idx],
-                'mask': mask,
-                'path': str(self.image_paths[idx]),
-                'category': self.categories_list[idx]
-            }
-            
-        except Exception as e:
-            self.logger.error(f"Error loading sample {idx}: {e}")
-            # Return dummy data to avoid training interruption
-            dummy_size = 128 if self.preprocessor is None else self.preprocessor.image_size[0]
-            return {
-                'image': torch.zeros(3, dummy_size, dummy_size),
-                'label': 0,
-                'mask': torch.zeros(1, 1, 1),
-                'path': str(self.image_paths[idx]),
+                'mask': processed_mask,
+                'path': str(image_path),
                 'category': self.categories_list[idx] if idx < len(self.categories_list) else 'unknown'
             }
+            
+        except (DataError, ValueError, RuntimeError) as e:
+            # Expected errors that should fail fast
+            self.logger.error(f"Data loading error for sample {idx} ({image_path}): {e}")
+            raise RuntimeError(f"Failed to load sample {idx}: {e}") from e
+            
+        except Exception as e:
+            # Unexpected errors - log details and fail
+            self.logger.error(f"Unexpected error loading sample {idx} ({image_path}): {type(e).__name__}: {e}")
+            self.logger.error(f"Category: {self.categories_list[idx] if idx < len(self.categories_list) else 'unknown'}")
+            self.logger.error(f"Split: {self.split}")
+            raise RuntimeError(f"Unexpected error loading sample {idx}: {e}") from e
+    
+    def _apply_preprocessing(self, image: np.ndarray, mask: np.ndarray, image_path: Path) -> torch.Tensor:
+        """Apply preprocessing to image and mask."""
+        if self.preprocessor is not None:
+            is_training = self.split == 'train'
+            
+            if mask is not None:
+                # Use albumentations transforms that support masks
+                try:
+                    transform = self.preprocessor.get_transform(is_training)
+                    transformed = transform(image=image, mask=mask)
+                    return transformed['image']
+                except Exception as e:
+                    self.logger.warning(f"Mask preprocessing failed for {image_path}: {e}, trying image-only")
+                    # Fall through to image-only preprocessing
+            
+            # Standard image preprocessing (image-only)
+            processed = self.preprocessor.preprocess_single(image_path, is_training=is_training)
+            if processed is None:
+                raise DataError(f"Image preprocessing failed: {image_path}")
+            return processed
+        else:
+            # Convert to tensor if no preprocessor
+            if not isinstance(image, np.ndarray):
+                raise DataError(f"Expected numpy array, got {type(image)}")
+            
+            # Ensure RGB format
+            if len(image.shape) == 3 and image.shape[2] == 3:
+                image_tensor = torch.from_numpy(image.transpose(2, 0, 1)).float() / 255.0
+                return image_tensor
+            else:
+                raise DataError(f"Unsupported image format: {image.shape}")
+    
+    def _process_mask(self, mask: Optional[np.ndarray], target_size: Optional[tuple] = None) -> torch.Tensor:
+        """Process mask to tensor format."""
+        if mask is None:
+            # Return dummy mask - single pixel to minimize memory
+            return torch.zeros(1, 1, 1, dtype=torch.float32)
+        
+        try:
+            # Convert to tensor
+            if isinstance(mask, np.ndarray):
+                if len(mask.shape) == 2:
+                    mask_tensor = torch.from_numpy(mask).float()
+                elif len(mask.shape) == 3 and mask.shape[2] == 1:
+                    mask_tensor = torch.from_numpy(mask.squeeze(-1)).float()
+                else:
+                    self.logger.warning(f"Unexpected mask shape: {mask.shape}, creating dummy mask")
+                    return torch.zeros(1, 1, 1, dtype=torch.float32)
+                
+                # Normalize to [0, 1] if needed
+                if mask_tensor.max() > 1.0:
+                    mask_tensor = mask_tensor / 255.0
+                
+                return mask_tensor
+            else:
+                self.logger.warning(f"Unexpected mask type: {type(mask)}, creating dummy mask")
+                return torch.zeros(1, 1, 1, dtype=torch.float32)
+                
+        except Exception as e:
+            self.logger.warning(f"Mask processing failed: {e}, creating dummy mask")
+            return torch.zeros(1, 1, 1, dtype=torch.float32)
     
     def _load_image(self, image_path: Path) -> Optional[np.ndarray]:
         """Load image with fallback methods."""

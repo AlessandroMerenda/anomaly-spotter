@@ -82,7 +82,7 @@ def load_config(args: argparse.Namespace) -> AutoencoderConfig:
     if hasattr(args, 'batch_size') and args.batch_size:
         config.batch_size = args.batch_size
     if hasattr(args, 'epochs') and args.epochs:
-        config.epochs = args.epochs
+        config.num_epochs = args.epochs
     if hasattr(args, 'learning_rate') and args.learning_rate:
         config.learning_rate = args.learning_rate
     
@@ -301,7 +301,7 @@ def main(args: argparse.Namespace) -> None:
         logger.info("TRAINING STARTED")
         logger.info("=" * 50)
         logger.info(f"Category: {args.category}")
-        logger.info(f"Epochs: {config.epochs}")
+        logger.info(f"Epochs: {config.num_epochs}")
         logger.info(f"Batch size: {config.batch_size}")
         logger.info(f"Learning rate: {config.learning_rate}")
         logger.info(f"Device: {device}")

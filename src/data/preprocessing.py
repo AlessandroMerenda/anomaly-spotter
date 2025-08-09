@@ -23,9 +23,21 @@ except ImportError as e:
     ALBUMENTATIONS_AVAILABLE = False
     # Fallback imports
     from torchvision import transforms as T
+    # Create dummy A namespace for fallback
+    class A:
+        pass
 
 # Import utilities from existing codebase
-from src.utils.logging_utils import setup_logger, DataError, handle_exception
+try:
+    # Try relative imports first
+    from ..utils.logging_utils import setup_logger, DataError, handle_exception
+except ImportError:
+    # Fallback to absolute imports
+    try:
+        from utils.logging_utils import setup_logger, DataError, handle_exception
+    except ImportError:
+        # Final fallback - direct path imports
+        from src.utils.logging_utils import setup_logger, DataError, handle_exception
 
 class MVTecPreprocessor:
     """
@@ -63,56 +75,85 @@ class MVTecPreprocessor:
     def _setup_transforms(self):
         """Setup augmentation pipelines."""
         
-        # Base transforms
-        base_transforms = [
-            A.Resize(height=self.image_size[0], width=self.image_size[1])
-        ]
-        
-        # Training augmentations
-        train_augmentations = [
-            A.RandomRotate90(p=0.5),
-            A.HorizontalFlip(p=0.5),
-            A.VerticalFlip(p=0.3),
-            A.GaussNoise(var_limit=(10.0, 50.0), p=0.3),
-            A.RandomBrightnessContrast(
-                brightness_limit=0.2, 
-                contrast_limit=0.2, 
-                p=0.5
-            ),
-            A.OneOf([
-                A.ElasticTransform(alpha=1, sigma=50, alpha_affine=50, p=0.3),
-                A.GridDistortion(p=0.3),
-                A.OpticalDistortion(distort_limit=1, shift_limit=0.5, p=0.3),
-            ], p=0.2),
-        ]
-        
-        # Normalization
-        if self.normalize:
-            if self.normalization_type == "imagenet":
-                norm_transform = A.Normalize(
-                    mean=[0.485, 0.456, 0.406], 
-                    std=[0.229, 0.224, 0.225]
-                )
-            elif self.normalization_type == "tanh":
-                # Match notebook normalization [-1, 1]
-                norm_transform = A.Normalize(
-                    mean=[0.5, 0.5, 0.5], 
-                    std=[0.5, 0.5, 0.5]
-                )
+        if ALBUMENTATIONS_AVAILABLE:
+            # Base transforms
+            base_transforms = [
+                A.Resize(height=self.image_size[0], width=self.image_size[1])
+            ]
+            
+            # Training augmentations
+            train_augmentations = [
+                A.RandomRotate90(p=0.5),
+                A.HorizontalFlip(p=0.5),
+                A.VerticalFlip(p=0.3),
+                A.GaussNoise(var_limit=(10.0, 50.0), p=0.3),
+                A.RandomBrightnessContrast(
+                    brightness_limit=0.2, 
+                    contrast_limit=0.2, 
+                    p=0.5
+                ),
+                A.OneOf([
+                    A.ElasticTransform(alpha=1, sigma=50, alpha_affine=50, p=0.3),
+                    A.GridDistortion(p=0.3),
+                    A.OpticalDistortion(distort_limit=1, shift_limit=0.5, p=0.3),
+                ], p=0.2),
+            ]
+            
+            # Normalization
+            if self.normalize:
+                if self.normalization_type == "imagenet":
+                    norm_transform = A.Normalize(
+                        mean=[0.485, 0.456, 0.406], 
+                        std=[0.229, 0.224, 0.225]
+                    )
+                elif self.normalization_type == "tanh":
+                    # Match notebook normalization [-1, 1]
+                    norm_transform = A.Normalize(
+                        mean=[0.5, 0.5, 0.5], 
+                        std=[0.5, 0.5, 0.5]
+                    )
+                else:
+                    raise ValueError(f"Unknown normalization type: {self.normalization_type}")
             else:
-                raise ValueError(f"Unknown normalization type: {self.normalization_type}")
+                norm_transform = A.NoOp()
+            
+            # Training pipeline
+            self.train_transform = A.Compose(
+                base_transforms + train_augmentations + [norm_transform, ToTensorV2()]
+            )
+            
+            # Test pipeline (no augmentation)
+            self.test_transform = A.Compose(
+                base_transforms + [norm_transform, ToTensorV2()]
+            )
+            
         else:
-            norm_transform = A.NoOp()
-        
-        # Training pipeline
-        self.train_transform = A.Compose(
-            base_transforms + train_augmentations + [norm_transform, ToTensorV2()]
-        )
-        
-        # Test pipeline (no augmentation)
-        self.test_transform = A.Compose(
-            base_transforms + [norm_transform, ToTensorV2()]
-        )
+            # Fallback to torchvision transforms
+            if self.normalize:
+                if self.normalization_type == "imagenet":
+                    normalize = T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+                elif self.normalization_type == "tanh":
+                    normalize = T.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])
+                else:
+                    raise ValueError(f"Unknown normalization type: {self.normalization_type}")
+            else:
+                normalize = T.Lambda(lambda x: x)  # No-op
+            
+            # Training pipeline with basic augmentations
+            self.train_transform = T.Compose([
+                T.Resize(self.image_size),
+                T.RandomHorizontalFlip(p=0.5),
+                T.RandomVerticalFlip(p=0.3),
+                T.ToTensor(),
+                normalize
+            ])
+            
+            # Test pipeline (no augmentation)
+            self.test_transform = T.Compose([
+                T.Resize(self.image_size),
+                T.ToTensor(),
+                normalize
+            ])
         
         self.logger.info("Transform pipelines initialized successfully")
     
@@ -172,8 +213,17 @@ class MVTecPreprocessor:
         
         try:
             transform = self.train_transform if is_training else self.test_transform
-            transformed = transform(image=image)
-            return transformed['image']
+            
+            if ALBUMENTATIONS_AVAILABLE:
+                # Albumentations format
+                transformed = transform(image=image)
+                return transformed['image']
+            else:
+                # Torchvision format - needs PIL Image
+                from PIL import Image
+                pil_image = Image.fromarray(image)
+                transformed = transform(pil_image)
+                return transformed
         
         except Exception as e:
             self.logger.error(f"Failed to transform image {image_path}: {e}")
@@ -208,8 +258,16 @@ class MVTecPreprocessor:
                 continue
             
             try:
-                transformed = transform(image=image)
-                successful_images.append(transformed['image'])
+                if ALBUMENTATIONS_AVAILABLE:
+                    # Albumentations format
+                    transformed = transform(image=image)
+                    successful_images.append(transformed['image'])
+                else:
+                    # Torchvision format - needs PIL Image
+                    from PIL import Image
+                    pil_image = Image.fromarray(image)
+                    transformed = transform(pil_image)
+                    successful_images.append(transformed)
             except Exception as e:
                 failed_count += 1
                 self.logger.error(f"Failed to transform {path}: {e}")
@@ -224,6 +282,10 @@ class MVTecPreprocessor:
         
         return torch.stack(successful_images)
     
-    def get_transform(self, is_training: bool = True) -> A.Compose:
+    def get_transform(self, is_training: bool = True):
         """Get the transform pipeline for external use."""
-        return self.train_transform if is_training else self.test_transform
+        if ALBUMENTATIONS_AVAILABLE:
+            return self.train_transform if is_training else self.test_transform
+        else:
+            # Return torchvision transform
+            return self.train_transform if is_training else self.test_transform

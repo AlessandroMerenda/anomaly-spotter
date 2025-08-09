@@ -141,13 +141,13 @@ class AnomalyDetectorTrainer:
         elif self.config.scheduler_type == 'cosine':
             scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
                 self.optimizer,
-                T_max=self.config.epochs,
+                T_max=self.config.num_epochs,
                 eta_min=1e-7
             )
         elif self.config.scheduler_type == 'step':
             scheduler = torch.optim.lr_scheduler.StepLR(
                 self.optimizer,
-                step_size=self.config.epochs // 3,
+                step_size=self.config.num_epochs // 3,
                 gamma=0.1
             )
         else:
@@ -171,6 +171,54 @@ class AnomalyDetectorTrainer:
             # Fallback to simple MSE
             return nn.MSELoss()
     
+    def _compute_loss(self, pred: torch.Tensor, target: torch.Tensor) -> tuple:
+        """
+        Compute loss with robust detection of loss function capabilities.
+        
+        Args:
+            pred: Predicted tensor
+            target: Target tensor
+            
+        Returns:
+            Tuple of (loss_value, losses_dict)
+        """
+        try:
+            # Try advanced loss function interface first
+            result = self.criterion(pred, target)
+            
+            # Check if result is tuple/list (advanced loss function)
+            if isinstance(result, (tuple, list)) and len(result) >= 2:
+                loss_value, losses_dict = result[0], result[1]
+                
+                # Validate loss_value is scalar tensor
+                if not isinstance(loss_value, torch.Tensor) or loss_value.dim() != 0:
+                    self.logger.warning("Loss function returned non-scalar loss, using total")
+                    loss_value = result[0] if isinstance(result[0], torch.Tensor) else torch.tensor(result[0])
+                
+                # Validate losses_dict
+                if not isinstance(losses_dict, dict):
+                    self.logger.warning("Loss function returned non-dict components, creating default")
+                    losses_dict = {'total': loss_value}
+                
+                return loss_value, losses_dict
+                
+            # Simple loss function - single scalar return
+            elif isinstance(result, torch.Tensor):
+                return result, {'total': result}
+            
+            else:
+                self.logger.warning(f"Unexpected loss function return type: {type(result)}")
+                # Convert to tensor if needed
+                loss_tensor = torch.tensor(result) if not isinstance(result, torch.Tensor) else result
+                return loss_tensor, {'total': loss_tensor}
+                
+        except Exception as e:
+            self.logger.error(f"Loss computation failed: {e}")
+            # Emergency fallback - compute MSE directly
+            mse_loss = torch.nn.functional.mse_loss(pred, target)
+            self.logger.warning("Using emergency MSE fallback")
+            return mse_loss, {'total': mse_loss, 'fallback_mse': mse_loss}
+    
     def train_epoch(self, dataloader: DataLoader, epoch: int) -> Tuple[float, Dict[str, float]]:
         """
         Train for one epoch.
@@ -188,7 +236,7 @@ class AnomalyDetectorTrainer:
         num_batches = len(dataloader)
         
         # Progress bar
-        pbar = tqdm(dataloader, desc=f'Epoch {epoch:3d}/{self.config.epochs}')
+        pbar = tqdm(dataloader, desc=f'Epoch {epoch:3d}/{self.config.num_epochs}')
         
         for batch_idx, batch in enumerate(pbar):
             try:
@@ -200,14 +248,8 @@ class AnomalyDetectorTrainer:
                 with torch.cuda.amp.autocast(enabled=self.use_amp):
                     reconstructed = self.model(images)
                     
-                    # Calculate loss
-                    if hasattr(self.criterion, 'forward') and len(self.criterion.forward.__code__.co_varnames) > 2:
-                        # Advanced loss function that returns components
-                        loss, losses_dict = self.criterion(reconstructed, images)
-                    else:
-                        # Simple loss function
-                        loss = self.criterion(reconstructed, images)
-                        losses_dict = {'total': loss}
+                    # Calculate loss using robust detection method
+                    loss, losses_dict = self._compute_loss(reconstructed, images)
                 
                 # Backward pass
                 self.optimizer.zero_grad()
@@ -313,11 +355,8 @@ class AnomalyDetectorTrainer:
                     with torch.cuda.amp.autocast(enabled=self.use_amp):
                         reconstructed = self.model(images)
                         
-                        # Calculate loss
-                        if hasattr(self.criterion, 'forward') and len(self.criterion.forward.__code__.co_varnames) > 2:
-                            loss, _ = self.criterion(reconstructed, images)
-                        else:
-                            loss = self.criterion(reconstructed, images)
+                        # Calculate loss using robust detection method  
+                        loss, _ = self._compute_loss(reconstructed, images)
                     
                     total_loss += loss.item()
                     
@@ -553,12 +592,12 @@ class AnomalyDetectorTrainer:
             start_epoch = self.load_checkpoint(resume_from)
         
         self.logger.info(f"Starting training from epoch {start_epoch}")
-        self.logger.info(f"Total epochs: {self.config.epochs}")
+        self.logger.info(f"Total epochs: {self.config.num_epochs}")
         self.logger.info(f"Device: {self.device}")
         self.logger.info(f"Mixed precision: {self.use_amp}")
         
         # Training loop
-        for epoch in range(start_epoch, self.config.epochs):
+        for epoch in range(start_epoch, self.config.num_epochs):
             epoch_start_time = time.time()
             
             # Training phase
@@ -616,7 +655,7 @@ class AnomalyDetectorTrainer:
         # Return results
         results = {
             'best_loss': self.best_loss,
-            'final_epoch': epoch if 'epoch' in locals() else self.config.epochs - 1,
+            'final_epoch': epoch if 'epoch' in locals() else self.config.num_epochs - 1,
             'thresholds': thresholds,
             'training_history': self.training_history,
             'total_training_time': sum(self.training_history['epoch_times'])
