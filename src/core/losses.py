@@ -23,51 +23,176 @@ from src.utils.logging_utils import setup_logger
 
 class SSIMCustom(nn.Module):
     """
-    Custom SSIM implementation as fallback when pytorch_msssim is not available.
+    Robust custom SSIM implementation as fallback when pytorch_msssim is not available.
+    
+    This implementation follows the original SSIM paper definition:
+    Wang, Z., et al. "Image quality assessment: from error visibility to structural similarity"
+    IEEE transactions on image processing 13.4 (2004): 600-612.
     """
-    def __init__(self, window_size=11, channel=3):
+    def __init__(self, window_size: int = 11, channel: int = 3, data_range: float = 1.0):
         super(SSIMCustom, self).__init__()
+        
+        # Validate inputs
+        if window_size % 2 == 0:
+            raise ValueError("window_size must be odd")
+        if window_size < 3:
+            raise ValueError("window_size must be at least 3")
+        if channel <= 0:
+            raise ValueError("channel must be positive")
+        if data_range <= 0:
+            raise ValueError("data_range must be positive")
+        
         self.window_size = window_size
         self.channel = channel
-        self.register_buffer('window', self._create_window(window_size, channel))
-    
-    def _gaussian(self, window_size, sigma):
-        gauss = torch.Tensor([torch.exp(-(x - window_size//2)**2/float(2*sigma**2)) for x in range(window_size)])
-        return gauss/gauss.sum()
-    
-    def _create_window(self, window_size, channel):
-        _1D_window = self._gaussian(window_size, 1.5).unsqueeze(1)
-        _2D_window = _1D_window.mm(_1D_window.t()).float().unsqueeze(0).unsqueeze(0)
-        window = _2D_window.expand(channel, 1, window_size, window_size).contiguous()
-        return window
-    
-    def forward(self, img1, img2):
-        (_, channel, height, width) = img1.size()
+        self.data_range = data_range
         
-        if channel == self.channel and self.window.data.type() == img1.data.type():
-            window = self.window
-        else:
-            window = self._create_window(self.window_size, channel)
-            window = window.to(img1.device).type_as(img1)
-            self.window = window
+        # SSIM constants (adjusted for data range)
+        self.C1 = (0.01 * data_range) ** 2
+        self.C2 = (0.03 * data_range) ** 2
+        
+        # Create and register Gaussian window
+        self.register_buffer('gaussian_window', self._create_gaussian_window(window_size, channel))
+    
+    def _gaussian_kernel_1d(self, window_size: int, sigma: float) -> torch.Tensor:
+        """Create 1D Gaussian kernel."""
+        coords = torch.arange(window_size, dtype=torch.float32)
+        coords -= window_size // 2
+        
+        g = torch.exp(-(coords ** 2) / (2 * sigma ** 2))
+        g = g / g.sum()
+        return g
+    
+    def _create_gaussian_window(self, window_size: int, channel: int) -> torch.Tensor:
+        """Create 2D Gaussian window for SSIM computation."""
+        sigma = 1.5  # Standard sigma for SSIM
+        
+        # Create 1D Gaussian kernel
+        gaussian_1d = self._gaussian_kernel_1d(window_size, sigma)
+        
+        # Create 2D Gaussian kernel by outer product
+        gaussian_2d = gaussian_1d[:, None] * gaussian_1d[None, :]
+        
+        # Expand for multiple channels
+        window = gaussian_2d.unsqueeze(0).unsqueeze(0)  # [1, 1, H, W]
+        window = window.expand(channel, 1, window_size, window_size)
+        
+        return window.contiguous()
+    
+    def _update_window_if_needed(self, input_tensor: torch.Tensor) -> torch.Tensor:
+        """Update Gaussian window if needed for different device/dtype/channels."""
+        _, channel, _, _ = input_tensor.shape
+        
+        # Check if window needs updating
+        if (channel != self.channel or 
+            self.gaussian_window.device != input_tensor.device or
+            self.gaussian_window.dtype != input_tensor.dtype):
+            
+            # Create new window with correct properties
+            window = self._create_gaussian_window(self.window_size, channel)
+            window = window.to(device=input_tensor.device, dtype=input_tensor.dtype)
+            
+            # Update stored values
             self.channel = channel
+            return window
         
-        mu1 = F.conv2d(img1, window, padding=self.window_size//2, groups=channel)
-        mu2 = F.conv2d(img2, window, padding=self.window_size//2, groups=channel)
+        return self.gaussian_window
+    
+    def _ssim_components(self, img1: torch.Tensor, img2: torch.Tensor, 
+                        window: torch.Tensor) -> tuple:
+        """Compute SSIM components (luminance, contrast, structure)."""
+        padding = self.window_size // 2
+        
+        # Compute local means
+        mu1 = F.conv2d(img1, window, padding=padding, groups=img1.size(1))
+        mu2 = F.conv2d(img2, window, padding=padding, groups=img2.size(1))
         
         mu1_sq = mu1.pow(2)
         mu2_sq = mu2.pow(2)
-        mu1_mu2 = mu1*mu2
+        mu1_mu2 = mu1 * mu2
         
-        sigma1_sq = F.conv2d(img1*img1, window, padding=self.window_size//2, groups=channel) - mu1_sq
-        sigma2_sq = F.conv2d(img2*img2, window, padding=self.window_size//2, groups=channel) - mu2_sq
-        sigma12 = F.conv2d(img1*img2, window, padding=self.window_size//2, groups=channel) - mu1_mu2
+        # Compute local variances and covariance
+        sigma1_sq = F.conv2d(img1 * img1, window, padding=padding, groups=img1.size(1)) - mu1_sq
+        sigma2_sq = F.conv2d(img2 * img2, window, padding=padding, groups=img2.size(1)) - mu2_sq
+        sigma12 = F.conv2d(img1 * img2, window, padding=padding, groups=img1.size(1)) - mu1_mu2
         
-        C1 = 0.01**2
-        C2 = 0.03**2
+        # Ensure non-negative variances (numerical stability)
+        sigma1_sq = torch.clamp(sigma1_sq, min=0)
+        sigma2_sq = torch.clamp(sigma2_sq, min=0)
         
-        ssim_map = ((2*mu1_mu2 + C1)*(2*sigma12 + C2))/((mu1_sq + mu2_sq + C1)*(sigma1_sq + sigma2_sq + C2))
-        return ssim_map.mean()
+        return mu1, mu2, mu1_sq, mu2_sq, mu1_mu2, sigma1_sq, sigma2_sq, sigma12
+    
+    def forward(self, img1: torch.Tensor, img2: torch.Tensor, 
+                return_components: bool = False) -> torch.Tensor:
+        """
+        Compute SSIM between two images.
+        
+        Args:
+            img1: First image tensor [B, C, H, W]
+            img2: Second image tensor [B, C, H, W]
+            return_components: If True, return (ssim, luminance, contrast, structure)
+            
+        Returns:
+            SSIM value(s) or tuple of components
+            
+        Raises:
+            ValueError: If input tensors have incompatible shapes
+        """
+        # Input validation
+        if img1.shape != img2.shape:
+            raise ValueError(f"Input tensors must have same shape: {img1.shape} vs {img2.shape}")
+        
+        if img1.dim() != 4:
+            raise ValueError(f"Expected 4D tensors [B,C,H,W], got {img1.dim()}D")
+        
+        if img1.size(2) < self.window_size or img1.size(3) < self.window_size:
+            raise ValueError(f"Input size {img1.shape[-2:]} too small for window_size {self.window_size}")
+        
+        # Update window for current input
+        window = self._update_window_if_needed(img1)
+        
+        # Compute SSIM components
+        mu1, mu2, mu1_sq, mu2_sq, mu1_mu2, sigma1_sq, sigma2_sq, sigma12 = self._ssim_components(
+            img1, img2, window
+        )
+        
+        # Compute SSIM components
+        luminance = (2 * mu1_mu2 + self.C1) / (mu1_sq + mu2_sq + self.C1)
+        contrast = (2 * torch.sqrt(sigma1_sq) * torch.sqrt(sigma2_sq) + self.C2) / (sigma1_sq + sigma2_sq + self.C2)
+        structure = (sigma12 + self.C2/2) / (torch.sqrt(sigma1_sq) * torch.sqrt(sigma2_sq) + self.C2/2)
+        
+        # Full SSIM
+        ssim_map = luminance * contrast * structure
+        ssim_value = ssim_map.mean()
+        
+        if return_components:
+            return ssim_value, luminance.mean(), contrast.mean(), structure.mean()
+        
+        return ssim_value
+    
+    def get_ssim_map(self, img1: torch.Tensor, img2: torch.Tensor) -> torch.Tensor:
+        """
+        Get pixel-wise SSIM map.
+        
+        Args:
+            img1: First image tensor [B, C, H, W]
+            img2: Second image tensor [B, C, H, W]
+            
+        Returns:
+            SSIM map tensor [B, C, H, W]
+        """
+        window = self._update_window_if_needed(img1)
+        mu1, mu2, mu1_sq, mu2_sq, mu1_mu2, sigma1_sq, sigma2_sq, sigma12 = self._ssim_components(
+            img1, img2, window
+        )
+        
+        # Compute pixel-wise SSIM
+        numerator = (2 * mu1_mu2 + self.C1) * (2 * sigma12 + self.C2)
+        denominator = (mu1_sq + mu2_sq + self.C1) * (sigma1_sq + sigma2_sq + self.C2)
+        
+        # Avoid division by zero
+        ssim_map = numerator / (denominator + 1e-8)
+        
+        return ssim_map
 
 
 class EdgePreservationLoss(nn.Module):
@@ -172,25 +297,48 @@ class CombinedLoss(nn.Module):
         self.logger.info(f"  Edge weight: {config.edge_weight}")
     
     def _init_ssim_loss(self):
-        """Initialize SSIM loss function."""
+        """Initialize SSIM loss function with robust fallback."""
+        # Determine data range based on normalization
+        data_range = 2.0 if self.config.normalize_type == "tanh" else 1.0  # tanh: [-1,1] = range 2
+        
         if SSIM_AVAILABLE:
-            self.ssim = SSIM(
-                data_range=1.0 if self.config.normalize_type == "tanh" else 2.0,
-                size_average=True,
-                channel=3,
-                win_size=11
-            )
-            self.ms_ssim = MS_SSIM(
-                data_range=1.0 if self.config.normalize_type == "tanh" else 2.0,
-                size_average=True,
-                channel=3,
-                win_size=11
-            )
-            self.logger.info("Using pytorch_msssim for SSIM loss")
+            try:
+                self.ssim = SSIM(
+                    data_range=data_range,
+                    size_average=True,
+                    channel=3,
+                    win_size=11
+                )
+                self.ms_ssim = MS_SSIM(
+                    data_range=data_range,
+                    size_average=True,
+                    channel=3,
+                    win_size=11
+                )
+                self.logger.info("Using pytorch_msssim for SSIM loss")
+                self._ssim_available = True
+            except Exception as e:
+                self.logger.warning(f"Failed to initialize pytorch_msssim: {e}. Falling back to custom implementation")
+                self._init_custom_ssim(data_range)
         else:
-            self.ssim = SSIMCustom(window_size=11, channel=3)
+            self._init_custom_ssim(data_range)
+    
+    def _init_custom_ssim(self, data_range: float):
+        """Initialize custom SSIM implementation."""
+        try:
+            self.ssim = SSIMCustom(
+                window_size=11, 
+                channel=3,
+                data_range=data_range
+            )
+            self.ms_ssim = None  # Custom implementation doesn't support MS-SSIM
+            self.logger.info("Using robust custom SSIM implementation")
+            self._ssim_available = True
+        except Exception as e:
+            self.logger.error(f"Failed to initialize custom SSIM: {e}. SSIM loss will be disabled")
+            self.ssim = None
             self.ms_ssim = None
-            self.logger.info("Using custom SSIM implementation")
+            self._ssim_available = False
     
     def _init_perceptual_loss(self):
         """Initialize perceptual loss network."""
@@ -209,6 +357,8 @@ class CombinedLoss(nn.Module):
             self.register_buffer('vgg_std', torch.tensor([0.229, 0.224, 0.225]).view(1, 3, 1, 1))
             
             self.logger.info("Perceptual loss initialized with VGG16")
+        else:
+            self.perceptual_net = None
     
     def _normalize_for_vgg(self, x):
         """Normalize images for VGG network."""
@@ -252,22 +402,41 @@ class CombinedLoss(nn.Module):
         return losses
     
     def _compute_ssim_loss(self, pred: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
-        """Compute SSIM loss."""
+        """Compute SSIM loss with robust error handling."""
+        if not self._ssim_available or self.ssim is None:
+            # SSIM not available, return zero loss
+            return torch.tensor(0.0, device=pred.device, dtype=pred.dtype)
+        
         try:
             ssim_value = self.ssim(pred, target)
+            
+            # Validate SSIM value
+            if torch.isnan(ssim_value) or torch.isinf(ssim_value):
+                self.logger.warning("SSIM returned NaN or Inf, using fallback")
+                return torch.tensor(0.0, device=pred.device, dtype=pred.dtype)
+            
             # Convert similarity to loss (1 - SSIM)
-            return 1 - ssim_value
+            # SSIM values should be in [-1, 1], but clamp to be safe
+            ssim_clamped = torch.clamp(ssim_value, -1.0, 1.0)
+            ssim_loss = 1.0 - ssim_clamped
+            
+            return ssim_loss
+            
         except Exception as e:
             self.logger.warning(f"SSIM computation failed: {e}. Using fallback.")
-            # Fallback to simple pixel loss
-            return self.l2_loss(pred, target)
+            # Fallback: disable SSIM for this forward pass
+            return torch.tensor(0.0, device=pred.device, dtype=pred.dtype)
     
     def _compute_perceptual_loss(self, pred: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
         """Compute perceptual loss using VGG features."""
-        if self.config.perceptual_weight == 0:
+        if self.config.perceptual_weight == 0 or self.perceptual_net is None:
             return torch.tensor(0.0, device=pred.device)
         
         try:
+            # Ensure perceptual_net is on the same device as inputs
+            if next(self.perceptual_net.parameters()).device != pred.device:
+                self.perceptual_net = self.perceptual_net.to(pred.device)
+            
             # Normalize inputs for VGG
             pred_norm = self._normalize_for_vgg(pred)
             target_norm = self._normalize_for_vgg(target)

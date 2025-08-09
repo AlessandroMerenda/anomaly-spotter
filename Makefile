@@ -209,11 +209,27 @@ format: ## Formatta il codice
 # Testing
 test: ## Esegue tutti i test
 	@echo "🧪 Esecuzione test..."
-	pytest tests/ -v --cov=src --cov-report=html --cov-report=term
+	python run_tests.py --coverage
 
-test-fast: ## Esegue test veloci (senza coverage)
+test-fast: ## Esegue test veloci (senza slow tests)
 	@echo "⚡ Test veloci..."
-	pytest tests/ -v -x
+	python run_tests.py --fast
+
+test-unit: ## Esegue solo unit test
+	@echo "🔬 Unit test..."
+	python run_tests.py --unit
+
+test-integration: ## Esegue solo integration test
+	@echo "🔗 Integration test..."
+	python run_tests.py --integration
+
+test-verbose: ## Esegue test con output verbose
+	@echo "📝 Test verbose..."
+	python run_tests.py --verbose
+
+test-coverage: ## Esegue test con coverage report completo
+	@echo "📊 Test con coverage..."
+	python run_tests.py --coverage --verbose
 
 # Application commands
 run-train: ## Esegue training del modello
